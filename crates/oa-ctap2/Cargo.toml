@@ -8,7 +8,7 @@ description = "Dispatcher CTAP2 com CBOR canônico, validação estrita e state-
 [dependencies]
 oa-core = { path = "../oa-core" }
 thiserror.workspace = true
-sha2 = { version = "0.10", default-features = false }
+sha2 = { version = "0.11", default-features = false }
 
 [features]
 default = ["std"]
