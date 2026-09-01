@@ -33,7 +33,11 @@ impl SecureEnvironment for VirtualEnvironment {
     }
 }
 
-fn build_make_credential_payload(client_data_hash: &[u8; 32], rp_id: &str, user_id: &[u8]) -> Vec<u8> {
+fn build_make_credential_payload(
+    client_data_hash: &[u8; 32],
+    rp_id: &str,
+    user_id: &[u8],
+) -> Vec<u8> {
     let mut payload = Vec::new();
     cbor::encode_map_header(&mut payload, 4);
     cbor::encode_unsigned(&mut payload, 0x01);
@@ -68,14 +72,24 @@ fn build_get_assertion_payload(rp_id: &str, client_data_hash: &[u8; 32]) -> Vec<
 
 fn main() {
     println!("Open Authenticator — Simulador CTAP2 (protótipo, não produção)");
-    let env = VirtualEnvironment { present: true, entropy: 0x42 };
+    let env = VirtualEnvironment {
+        present: true,
+        entropy: 0x42,
+    };
     let mut authenticator = Ctap2::new(env, [0xAA; 16]);
 
     // getInfo
     let resp = authenticator.dispatch(&[CMD_GET_INFO]).expect("getInfo");
     println!("getInfo ({} bytes): {:02x?}", resp.len(), resp);
     assert_eq!(resp[0], 0x00);
-    println!("  -> versões e aaguid presentes: {}", if resp.windows(8).any(|w| w == b"FIDO_2_0") { "ok" } else { "falha" });
+    println!(
+        "  -> versões e aaguid presentes: {}",
+        if resp.windows(8).any(|w| w == b"FIDO_2_0") {
+            "ok"
+        } else {
+            "falha"
+        }
+    );
 
     // makeCredential
     let cdh = [0x11; 32];
@@ -84,7 +98,11 @@ fn main() {
     req.extend_from_slice(&payload);
     match authenticator.dispatch(&req) {
         Ok(resp) => {
-            println!("makeCredential ok ({} bytes): {:02x?}", resp.len(), &resp[..64.min(resp.len())]);
+            println!(
+                "makeCredential ok ({} bytes): {:02x?}",
+                resp.len(),
+                &resp[..64.min(resp.len())]
+            );
             assert_eq!(resp[0], 0x00);
         }
         Err(e) => {
@@ -99,7 +117,11 @@ fn main() {
     req2.extend_from_slice(&payload2);
     match authenticator.dispatch(&req2) {
         Ok(resp) => {
-            println!("getAssertion ok ({} bytes): {:02x?}", resp.len(), &resp[..64.min(resp.len())]);
+            println!(
+                "getAssertion ok ({} bytes): {:02x?}",
+                resp.len(),
+                &resp[..64.min(resp.len())]
+            );
         }
         Err(e) => println!("getAssertion erro: {e:?}"),
     }

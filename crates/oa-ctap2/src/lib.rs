@@ -1,14 +1,19 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
+#![allow(dead_code)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::let_unit_value)]
 
 extern crate alloc;
 
-use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
+use alloc::collections::BTreeSet;
+use alloc::string::String;
 use alloc::vec;
+use alloc::vec::Vec;
 
-use oa_core::{Algorithm, AuthenticatorInfo, CtapStatusCode, KeyHandle, Options, SecureEnvironment, Signature};
+use oa_core::{
+    Algorithm, AuthenticatorInfo, CtapStatusCode, KeyHandle, Options, SecureEnvironment,
+};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -368,7 +373,10 @@ pub mod cbor {
     }
 
     // helpers públicos para validação rápida
-    pub fn decode_map_int_keys<'a>(dec: &mut Decoder<'a>, seen: &mut BTreeSet<u64>) -> Result<u64, CtapStatusCode> {
+    pub fn decode_map_int_keys<'a>(
+        dec: &mut Decoder<'a>,
+        seen: &mut BTreeSet<u64>,
+    ) -> Result<u64, CtapStatusCode> {
         // placeholder — não usado
         let _ = seen;
         dec.decode_map_header()
@@ -499,6 +507,7 @@ where
         out
     }
 
+    #[allow(clippy::type_complexity)]
     fn build_auth_data(
         &self,
         rp_id: &str,
@@ -613,11 +622,7 @@ where
         out
     }
 
-    fn encode_make_credential_response(
-        &self,
-        credential_id: &[u8],
-        auth_data: &[u8],
-    ) -> Vec<u8> {
+    fn encode_make_credential_response(&self, credential_id: &[u8], auth_data: &[u8]) -> Vec<u8> {
         let mut cbor = Vec::new();
         cbor::encode_map_header(&mut cbor, 3);
         cbor::encode_unsigned(&mut cbor, 0x01); // fmt
@@ -689,10 +694,7 @@ where
         Ok(vec![CTAP2_OK])
     }
 
-    fn handle_make_credential(
-        &mut self,
-        payload: &[u8],
-    ) -> Result<Vec<u8>, CtapError<E::Error>> {
+    fn handle_make_credential(&mut self, payload: &[u8]) -> Result<Vec<u8>, CtapError<E::Error>> {
         if payload.is_empty() {
             return Err(CtapStatusCode::MissingParameter.into());
         }
@@ -713,17 +715,25 @@ where
 
         // excludeList: se algum credId já existe para rp, retorna CredentialExcluded
         for exclude_id in &params.exclude_list {
-            if self.credentials.iter().any(|c| &c.id == exclude_id && c.rp_id == params.rp_id) {
+            if self
+                .credentials
+                .iter()
+                .any(|c| &c.id == exclude_id && c.rp_id == params.rp_id)
+            {
                 return Err(CtapStatusCode::CredentialExcluded.into());
             }
         }
 
         // verifica opções: se rk requerido, garante espaço
         if params.require_resident_key {
-            if self.credentials.len() >= self.info.remaining_discoverable_credentials.unwrap_or(25) as usize {
+            if self.credentials.len()
+                >= self.info.remaining_discoverable_credentials.unwrap_or(25) as usize
+            {
                 return Err(CtapStatusCode::KeyStoreFull.into());
             }
-            if self.credentials.len() >= self.info.max_credential_count_in_list.unwrap_or(8) as usize * 3 {
+            if self.credentials.len()
+                >= self.info.max_credential_count_in_list.unwrap_or(8) as usize * 3
+            {
                 // limite extra
                 return Err(CtapStatusCode::KeyStoreFull.into());
             }
@@ -753,7 +763,9 @@ where
 
         // Gera credential id determinístico (random + counter)
         let mut cred_id = vec![0u8; 16];
-        self.env.random(&mut cred_id).map_err(CtapError::Environment)?;
+        self.env
+            .random(&mut cred_id)
+            .map_err(CtapError::Environment)?;
         // mistura counter para unicidade mesmo com mesmo random seed determinístico
         let ctr = self.next_counter()?;
         cred_id[0] ^= (ctr & 0xff) as u8;
@@ -777,7 +789,12 @@ where
             flags
         };
         let counter = ctr;
-        let auth_data = self.build_auth_data(&params.rp_id, flags, counter, Some((&self.info.aaguid, &cred_id, &x, &y)));
+        let auth_data = self.build_auth_data(
+            &params.rp_id,
+            flags,
+            counter,
+            Some((&self.info.aaguid, &cred_id, &x, &y)),
+        );
 
         // armazena credencial
         let stored = StoredCredential {
@@ -794,10 +811,7 @@ where
         Ok(self.encode_make_credential_response(&cred_id, &auth_data))
     }
 
-    fn handle_get_assertion(
-        &mut self,
-        payload: &[u8],
-    ) -> Result<Vec<u8>, CtapError<E::Error>> {
+    fn handle_get_assertion(&mut self, payload: &[u8]) -> Result<Vec<u8>, CtapError<E::Error>> {
         if payload.is_empty() {
             return Err(CtapStatusCode::MissingParameter.into());
         }
@@ -889,36 +903,33 @@ where
         Ok(self.encode_get_assertion_response(stored, &auth_data, &sig))
     }
 
-    fn handle_client_pin(
-        &mut self,
-        payload: &[u8],
-    ) -> Result<Vec<u8>, CtapError<E::Error>> {
+    fn handle_client_pin(&mut self, payload: &[u8]) -> Result<Vec<u8>, CtapError<E::Error>> {
         if payload.is_empty() {
             return Err(CtapStatusCode::MissingParameter.into());
         }
         // parsing mínimo para subcomando 0x01..0x09
         let mut dec = cbor::Decoder::new(payload);
-        let map_len = dec.decode_map_header().map_err(|e| CtapError::Status(e))?;
+        let map_len = dec.decode_map_header().map_err(CtapError::Status)?;
         if map_len == 0 {
             return Err(CtapStatusCode::MissingParameter.into());
         }
         let mut seen = BTreeSet::new();
         let mut subcommand: Option<u64> = None;
         for _ in 0..map_len {
-            let key = dec.decode_unsigned().map_err(|e| CtapError::Status(e))?;
+            let key = dec.decode_unsigned().map_err(CtapError::Status)?;
             if !seen.insert(key) {
                 return Err(CtapStatusCode::InvalidCbor.into());
             }
             match key {
                 0x01 => {
-                    subcommand = Some(dec.decode_unsigned().map_err(|e| CtapError::Status(e))?);
+                    subcommand = Some(dec.decode_unsigned().map_err(CtapError::Status)?);
                 }
                 _ => {
-                    dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                    dec.skip_value().map_err(CtapError::Status)?;
                 }
             }
         }
-        dec.expect_end().map_err(|e| CtapError::Status(e))?;
+        dec.expect_end().map_err(CtapError::Status)?;
         match subcommand {
             Some(0x01) | Some(0x02) | Some(0x03) => Err(CtapStatusCode::PinNotSet.into()),
             Some(0x04) => Err(CtapStatusCode::PinRequired.into()),
@@ -935,7 +946,7 @@ where
         payload: &[u8],
     ) -> Result<MakeCredentialParams, CtapError<E::Error>> {
         let mut dec = cbor::Decoder::new(payload);
-        let map_len = dec.decode_map_header().map_err(|e| CtapError::Status(e))?;
+        let map_len = dec.decode_map_header().map_err(CtapError::Status)?;
         if map_len > 9 {
             return Err(CtapStatusCode::InvalidCbor.into());
         }
@@ -954,13 +965,13 @@ where
         let mut pin_uv_auth_protocol: Option<u32> = None;
 
         for _ in 0..map_len {
-            let key = dec.decode_unsigned().map_err(|e| CtapError::Status(e))?;
+            let key = dec.decode_unsigned().map_err(CtapError::Status)?;
             if !seen.insert(key) {
                 return Err(CtapStatusCode::InvalidCbor.into());
             }
             match key {
                 0x01 => {
-                    let bytes = dec.decode_bytes().map_err(|e| CtapError::Status(e))?;
+                    let bytes = dec.decode_bytes().map_err(CtapError::Status)?;
                     if bytes.len() != 32 {
                         return Err(CtapStatusCode::InvalidParameter.into());
                     }
@@ -970,22 +981,22 @@ where
                 }
                 0x02 => {
                     // rp map { id, name }
-                    let inner_len = dec.decode_map_header().map_err(|e| CtapError::Status(e))?;
+                    let inner_len = dec.decode_map_header().map_err(CtapError::Status)?;
                     if inner_len == 0 || inner_len > 3 {
                         return Err(CtapStatusCode::InvalidCbor.into());
                     }
                     let mut inner_seen = BTreeSet::new();
                     for _ in 0..inner_len {
-                        let ikey = dec.decode_text().map_err(|e| CtapError::Status(e))?;
+                        let ikey = dec.decode_text().map_err(CtapError::Status)?;
                         if !inner_seen.insert(ikey.clone()) {
                             return Err(CtapStatusCode::InvalidCbor.into());
                         }
                         if ikey == "id" {
-                            rp_id = Some(dec.decode_text().map_err(|e| CtapError::Status(e))?);
+                            rp_id = Some(dec.decode_text().map_err(CtapError::Status)?);
                         } else if ikey == "name" {
-                            rp_name = Some(dec.decode_text().map_err(|e| CtapError::Status(e))?);
+                            rp_name = Some(dec.decode_text().map_err(CtapError::Status)?);
                         } else {
-                            dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                            dec.skip_value().map_err(CtapError::Status)?;
                         }
                     }
                     if rp_id.is_none() {
@@ -994,28 +1005,28 @@ where
                 }
                 0x03 => {
                     // user map { id, name, displayName }
-                    let inner_len = dec.decode_map_header().map_err(|e| CtapError::Status(e))?;
+                    let inner_len = dec.decode_map_header().map_err(CtapError::Status)?;
                     if inner_len == 0 || inner_len > 4 {
                         return Err(CtapStatusCode::InvalidCbor.into());
                     }
                     let mut inner_seen = BTreeSet::new();
                     for _ in 0..inner_len {
-                        let ikey = dec.decode_text().map_err(|e| CtapError::Status(e))?;
+                        let ikey = dec.decode_text().map_err(CtapError::Status)?;
                         if !inner_seen.insert(ikey.clone()) {
                             return Err(CtapStatusCode::InvalidCbor.into());
                         }
                         if ikey == "id" {
-                            let b = dec.decode_bytes().map_err(|e| CtapError::Status(e))?;
+                            let b = dec.decode_bytes().map_err(CtapError::Status)?;
                             if b.is_empty() || b.len() > 64 {
                                 return Err(CtapStatusCode::InvalidParameter.into());
                             }
                             user_id = Some(b);
                         } else if ikey == "name" {
-                            user_name = Some(dec.decode_text().map_err(|e| CtapError::Status(e))?);
+                            user_name = Some(dec.decode_text().map_err(CtapError::Status)?);
                         } else if ikey == "displayName" {
-                            let _ = dec.decode_text().map_err(|e| CtapError::Status(e))?;
+                            let _ = dec.decode_text().map_err(CtapError::Status)?;
                         } else {
-                            dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                            dec.skip_value().map_err(CtapError::Status)?;
                         }
                     }
                     if user_id.is_none() {
@@ -1024,7 +1035,7 @@ where
                 }
                 0x04 => {
                     // pubKeyCredParams array of maps
-                    let arr_len = dec.decode_array_header().map_err(|e| CtapError::Status(e))?;
+                    let arr_len = dec.decode_array_header().map_err(CtapError::Status)?;
                     if arr_len == 0 {
                         return Err(CtapStatusCode::MissingParameter.into());
                     }
@@ -1033,50 +1044,51 @@ where
                     }
                     let mut out = Vec::new();
                     for _ in 0..arr_len {
-                        let mlen = dec.decode_map_header().map_err(|e| CtapError::Status(e))?;
+                        let mlen = dec.decode_map_header().map_err(CtapError::Status)?;
                         let mut t: Option<String> = None;
                         let mut alg: Option<i64> = None;
                         let mut inner_seen = BTreeSet::new();
                         for _ in 0..mlen {
-                            let k = dec.decode_text().map_err(|e| CtapError::Status(e))?;
+                            let k = dec.decode_text().map_err(CtapError::Status)?;
                             if !inner_seen.insert(k.clone()) {
                                 return Err(CtapStatusCode::InvalidCbor.into());
                             }
                             if k == "type" {
-                                t = Some(dec.decode_text().map_err(|e| CtapError::Status(e))?);
+                                t = Some(dec.decode_text().map_err(CtapError::Status)?);
                             } else if k == "alg" {
-                                alg = Some(dec.decode_int().map_err(|e| CtapError::Status(e))?);
+                                alg = Some(dec.decode_int().map_err(CtapError::Status)?);
                             } else {
-                                dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                                dec.skip_value().map_err(CtapError::Status)?;
                             }
                         }
                         let t = t.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))?;
-                        let alg = alg.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))? as i32;
+                        let alg =
+                            alg.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))? as i32;
                         out.push((t, alg));
                     }
                     pub_key_cred_params = Some(out);
                 }
                 0x05 => {
                     // excludeList
-                    let arr_len = dec.decode_array_header().map_err(|e| CtapError::Status(e))?;
+                    let arr_len = dec.decode_array_header().map_err(CtapError::Status)?;
                     if arr_len > 16 {
                         return Err(CtapStatusCode::LimitExceeded.into());
                     }
                     for _ in 0..arr_len {
-                        let mlen = dec.decode_map_header().map_err(|e| CtapError::Status(e))?;
+                        let mlen = dec.decode_map_header().map_err(CtapError::Status)?;
                         let mut id_opt: Option<Vec<u8>> = None;
                         let mut inner_seen = BTreeSet::new();
                         for _ in 0..mlen {
-                            let k = dec.decode_text().map_err(|e| CtapError::Status(e))?;
+                            let k = dec.decode_text().map_err(CtapError::Status)?;
                             if !inner_seen.insert(k.clone()) {
                                 return Err(CtapStatusCode::InvalidCbor.into());
                             }
                             if k == "id" {
-                                id_opt = Some(dec.decode_bytes().map_err(|e| CtapError::Status(e))?);
+                                id_opt = Some(dec.decode_bytes().map_err(CtapError::Status)?);
                             } else if k == "type" {
-                                let _ = dec.decode_text().map_err(|e| CtapError::Status(e))?;
+                                let _ = dec.decode_text().map_err(CtapError::Status)?;
                             } else {
-                                dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                                dec.skip_value().map_err(CtapError::Status)?;
                             }
                         }
                         if let Some(id) = id_opt {
@@ -1086,36 +1098,36 @@ where
                 }
                 0x06 => {
                     // extensions map — skip
-                    dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                    dec.skip_value().map_err(CtapError::Status)?;
                 }
                 0x07 => {
                     // options map { rk, uv }
-                    let mlen = dec.decode_map_header().map_err(|e| CtapError::Status(e))?;
+                    let mlen = dec.decode_map_header().map_err(CtapError::Status)?;
                     let mut seen2 = BTreeSet::new();
                     for _ in 0..mlen {
-                        let k = dec.decode_text().map_err(|e| CtapError::Status(e))?;
+                        let k = dec.decode_text().map_err(CtapError::Status)?;
                         if !seen2.insert(k.clone()) {
                             return Err(CtapStatusCode::InvalidCbor.into());
                         }
                         if k == "rk" {
-                            rk = dec.decode_bool().map_err(|e| CtapError::Status(e))?;
+                            rk = dec.decode_bool().map_err(CtapError::Status)?;
                         } else if k == "uv" {
-                            uv = dec.decode_bool().map_err(|e| CtapError::Status(e))?;
+                            uv = dec.decode_bool().map_err(CtapError::Status)?;
                         } else if k == "up" {
-                            up = dec.decode_bool().map_err(|e| CtapError::Status(e))?;
+                            up = dec.decode_bool().map_err(CtapError::Status)?;
                         } else {
                             // unknown option => skip value mas depois retorna UnsupportedOption?
-                            let _ = dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                            dec.skip_value().map_err(CtapError::Status)?;
                             // spec: unknown option should be ignored? Para strict, retorna UnsupportedOption
                         }
                     }
                 }
                 0x08 => {
-                    let b = dec.decode_bytes().map_err(|e| CtapError::Status(e))?;
+                    let b = dec.decode_bytes().map_err(CtapError::Status)?;
                     pin_uv_auth_param = Some(b);
                 }
                 0x09 => {
-                    let v = dec.decode_unsigned().map_err(|e| CtapError::Status(e))?;
+                    let v = dec.decode_unsigned().map_err(CtapError::Status)?;
                     if v > u32::MAX as u64 {
                         return Err(CtapStatusCode::InvalidParameter.into());
                     }
@@ -1124,16 +1136,18 @@ where
                 _ => {
                     // chave desconhecida — por spec deve ser ignorada? Para estrito retornamos InvalidParameter
                     // Mas para compat futura, ignoramos e pulamos valor
-                    dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                    dec.skip_value().map_err(CtapError::Status)?;
                 }
             }
         }
-        dec.expect_end().map_err(|e| CtapError::Status(e))?;
+        dec.expect_end().map_err(CtapError::Status)?;
 
-        let client_data_hash = client_data_hash.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))?;
+        let client_data_hash =
+            client_data_hash.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))?;
         let rp_id = rp_id.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))?;
         let user_id = user_id.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))?;
-        let pub_key_cred_params = pub_key_cred_params.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))?;
+        let pub_key_cred_params =
+            pub_key_cred_params.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))?;
 
         Ok(MakeCredentialParams {
             client_data_hash,
@@ -1156,7 +1170,7 @@ where
         payload: &[u8],
     ) -> Result<GetAssertionParams, CtapError<E::Error>> {
         let mut dec = cbor::Decoder::new(payload);
-        let map_len = dec.decode_map_header().map_err(|e| CtapError::Status(e))?;
+        let map_len = dec.decode_map_header().map_err(CtapError::Status)?;
         if map_len > 8 {
             return Err(CtapStatusCode::InvalidCbor.into());
         }
@@ -1170,16 +1184,16 @@ where
         let mut pin_uv_auth_protocol: Option<u32> = None;
 
         for _ in 0..map_len {
-            let key = dec.decode_unsigned().map_err(|e| CtapError::Status(e))?;
+            let key = dec.decode_unsigned().map_err(CtapError::Status)?;
             if !seen.insert(key) {
                 return Err(CtapStatusCode::InvalidCbor.into());
             }
             match key {
                 0x01 => {
-                    rp_id = Some(dec.decode_text().map_err(|e| CtapError::Status(e))?);
+                    rp_id = Some(dec.decode_text().map_err(CtapError::Status)?);
                 }
                 0x02 => {
-                    let bytes = dec.decode_bytes().map_err(|e| CtapError::Status(e))?;
+                    let bytes = dec.decode_bytes().map_err(CtapError::Status)?;
                     if bytes.len() != 32 {
                         return Err(CtapStatusCode::InvalidParameter.into());
                     }
@@ -1188,25 +1202,25 @@ where
                     client_data_hash = Some(arr);
                 }
                 0x03 => {
-                    let arr_len = dec.decode_array_header().map_err(|e| CtapError::Status(e))?;
+                    let arr_len = dec.decode_array_header().map_err(CtapError::Status)?;
                     if arr_len > 16 {
                         return Err(CtapStatusCode::LimitExceeded.into());
                     }
                     for _ in 0..arr_len {
-                        let mlen = dec.decode_map_header().map_err(|e| CtapError::Status(e))?;
+                        let mlen = dec.decode_map_header().map_err(CtapError::Status)?;
                         let mut id_opt: Option<Vec<u8>> = None;
                         let mut inner_seen = BTreeSet::new();
                         for _ in 0..mlen {
-                            let k = dec.decode_text().map_err(|e| CtapError::Status(e))?;
+                            let k = dec.decode_text().map_err(CtapError::Status)?;
                             if !inner_seen.insert(k.clone()) {
                                 return Err(CtapStatusCode::InvalidCbor.into());
                             }
                             if k == "id" {
-                                id_opt = Some(dec.decode_bytes().map_err(|e| CtapError::Status(e))?);
+                                id_opt = Some(dec.decode_bytes().map_err(CtapError::Status)?);
                             } else if k == "type" {
-                                let _ = dec.decode_text().map_err(|e| CtapError::Status(e))?;
+                                let _ = dec.decode_text().map_err(CtapError::Status)?;
                             } else {
-                                dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                                dec.skip_value().map_err(CtapError::Status)?;
                             }
                         }
                         if let Some(id) = id_opt {
@@ -1216,42 +1230,43 @@ where
                 }
                 0x04 => {
                     // extensions — skip
-                    dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                    dec.skip_value().map_err(CtapError::Status)?;
                 }
                 0x05 => {
                     // options { up, uv }
-                    let mlen = dec.decode_map_header().map_err(|e| CtapError::Status(e))?;
+                    let mlen = dec.decode_map_header().map_err(CtapError::Status)?;
                     let mut s2 = BTreeSet::new();
                     for _ in 0..mlen {
-                        let k = dec.decode_text().map_err(|e| CtapError::Status(e))?;
+                        let k = dec.decode_text().map_err(CtapError::Status)?;
                         if !s2.insert(k.clone()) {
                             return Err(CtapStatusCode::InvalidCbor.into());
                         }
                         if k == "up" {
-                            up = dec.decode_bool().map_err(|e| CtapError::Status(e))?;
+                            up = dec.decode_bool().map_err(CtapError::Status)?;
                         } else if k == "uv" {
-                            uv = dec.decode_bool().map_err(|e| CtapError::Status(e))?;
+                            uv = dec.decode_bool().map_err(CtapError::Status)?;
                         } else {
-                            dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                            dec.skip_value().map_err(CtapError::Status)?;
                         }
                     }
                 }
                 0x06 => {
-                    let b = dec.decode_bytes().map_err(|e| CtapError::Status(e))?;
+                    let b = dec.decode_bytes().map_err(CtapError::Status)?;
                     pin_uv_auth_param = Some(b);
                 }
                 0x07 => {
-                    let v = dec.decode_unsigned().map_err(|e| CtapError::Status(e))?;
+                    let v = dec.decode_unsigned().map_err(CtapError::Status)?;
                     pin_uv_auth_protocol = Some(v as u32);
                 }
                 _ => {
-                    dec.skip_value().map_err(|e| CtapError::Status(e))?;
+                    dec.skip_value().map_err(CtapError::Status)?;
                 }
             }
         }
-        dec.expect_end().map_err(|e| CtapError::Status(e))?;
+        dec.expect_end().map_err(CtapError::Status)?;
         let rp_id = rp_id.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))?;
-        let client_data_hash = client_data_hash.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))?;
+        let client_data_hash =
+            client_data_hash.ok_or(CtapError::Status(CtapStatusCode::MissingParameter))?;
         Ok(GetAssertionParams {
             rp_id,
             client_data_hash,
@@ -1319,7 +1334,13 @@ mod tests {
     }
 
     fn new_ctap() -> Ctap2<Env> {
-        Ctap2::new(Env { present: true, counter_byte: 0x42 }, [0x11; 16])
+        Ctap2::new(
+            Env {
+                present: true,
+                counter_byte: 0x42,
+            },
+            [0x11; 16],
+        )
     }
 
     fn make_credential_payload(
@@ -1565,7 +1586,11 @@ mod tests {
     fn cbor_non_minimal_rejected() {
         let mut ctap = new_ctap();
         // encode 0x01 as 0x18 0x01 (non-minimal)
-        let payload = vec![0xa1, 0x18, 0x01, 0x58, 0x20, 0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA];
+        let payload = vec![
+            0xa1, 0x18, 0x01, 0x58, 0x20, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+            0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+            0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
+        ];
         let mut req = vec![CMD_MAKE_CREDENTIAL];
         req.extend_from_slice(&payload);
         let err = ctap.dispatch(&req).unwrap_err();
@@ -1597,5 +1622,99 @@ mod tests {
         let mut dec = cbor::Decoder::new(&resp[1..]);
         let mlen = dec.decode_map_header().unwrap();
         assert_eq!(mlen, 3);
+    }
+
+    fn hex_decode(s: &str) -> Vec<u8> {
+        let s = s.trim();
+        let mut out = Vec::with_capacity(s.len() / 2);
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b' ' || bytes[i] == b'\n' || bytes[i] == b'\r' || bytes[i] == b'\t' {
+                i += 1;
+                continue;
+            }
+            let hi = (bytes[i] as char).to_digit(16).expect("hex") as u8;
+            let lo = (bytes[i + 1] as char).to_digit(16).expect("hex") as u8;
+            out.push((hi << 4) | lo);
+            i += 2;
+        }
+        out
+    }
+
+    #[test]
+    fn vectors_match_expected_status() {
+        use std::fs;
+        use std::path::Path;
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let vectors_dir = manifest.join("../../vectors");
+        if !vectors_dir.exists() {
+            // em CI o caminho pode ser diferente; tenta fallback
+            return;
+        }
+        let entries = fs::read_dir(&vectors_dir).expect("read vectors");
+        let mut count = 0;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let content = fs::read_to_string(&path).expect("read json");
+            let v: serde_json::Value = serde_json::from_str(&content).expect("parse json");
+            let name = v.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
+            let hex = v
+                .get("request_hex")
+                .and_then(|h| h.as_str())
+                .expect("request_hex");
+            let expected = v
+                .get("expected_status")
+                .and_then(|s| s.as_u64())
+                .unwrap_or(0) as u8;
+            let req = hex_decode(hex);
+            // cada vetor isolado em novo authenticator (como python faz)
+            let mut ctap = new_ctap();
+            let result = ctap.dispatch(&req);
+            match result {
+                Ok(resp) => {
+                    assert_eq!(
+                        resp[0],
+                        expected,
+                        "vetor {} ({}) esperado status {:02x} obteve {:02x} com resp {:02x?}",
+                        path.display(),
+                        name,
+                        expected,
+                        resp[0],
+                        resp
+                    );
+                }
+                Err(CtapError::Status(code)) => {
+                    assert_eq!(
+                        code.as_u8(),
+                        expected,
+                        "vetor {} ({}) esperado status {:02x} obteve {:02x} {:?}",
+                        path.display(),
+                        name,
+                        expected,
+                        code.as_u8(),
+                        code
+                    );
+                }
+                Err(e) => {
+                    panic!(
+                        "vetor {} ({}) erro inesperado {:?} esperado {:02x}",
+                        path.display(),
+                        name,
+                        e,
+                        expected
+                    );
+                }
+            }
+            count += 1;
+        }
+        assert!(
+            count >= 5,
+            "esperava ao menos 5 vetores, encontrou {}",
+            count
+        );
     }
 }

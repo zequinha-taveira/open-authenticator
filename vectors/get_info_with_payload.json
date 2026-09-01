@@ -1,0 +1,7 @@
+{
+  "name": "get-info-with-payload",
+  "request_hex": "0400",
+  "expected_status": 3,
+  "expected_status_name": "InvalidLength",
+  "description": "getInfo com payload deve retornar 0x03 InvalidLength"
+}

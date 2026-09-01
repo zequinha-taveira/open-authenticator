@@ -1,0 +1,7 @@
+{
+  "name": "invalid-command",
+  "request_hex": "ff",
+  "expected_status": 1,
+  "expected_status_name": "InvalidCommand",
+  "description": "Comando 0xFF desconhecido deve retornar 0x01"
+}

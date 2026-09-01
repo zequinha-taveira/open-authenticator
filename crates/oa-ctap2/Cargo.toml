@@ -15,5 +15,8 @@ default = ["std"]
 std = ["oa-core/std", "sha2/std"]
 alloc = ["oa-core/alloc"]
 
+[dev-dependencies]
+serde_json = "1.0"
+
 [lints]
 workspace = true

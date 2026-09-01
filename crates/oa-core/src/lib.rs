@@ -439,7 +439,11 @@ impl InMemoryTransport {
         Self {
             queue: Vec::new(),
             max_frames: if max_frames == 0 { 16 } else { max_frames },
-            max_frame_size: if max_frame_size == 0 { 1200 } else { max_frame_size },
+            max_frame_size: if max_frame_size == 0 {
+                1200
+            } else {
+                max_frame_size
+            },
             disconnected: false,
         }
     }
@@ -494,15 +498,13 @@ impl Transport for InMemoryTransport {
         if self.disconnected {
             return Err(InMemoryTransportError::Disconnected);
         }
-        let frame = self.queue.pop().ok_or(InMemoryTransportError::Empty)?;
-        // remove from front? usamos pop (LIFO) para simplicidade, mas deveria ser FIFO; vamos usar remove 0
-        // Como já fizemos pop, precisamos pegar o primeiro inserido: usar remove(0) seria FIFO. Ajustamos:
-        // Na prática queue[0] é mais antigo; mas usamos pop que pega último. Para testes funciona se só há 1 frame.
-        // Corrigimos: se houver mais de 1, garantimos FIFO re-inserindo corretamente?
-        // Simplifica: mantemos pop como LIFO mas documentamos.
+        if self.queue.is_empty() {
+            return Err(InMemoryTransportError::Empty);
+        }
+        let frame = self.queue.remove(0);
         if buffer.len() < frame.len() {
-            // devolve frame para não perder dados
-            self.queue.push(frame);
+            // devolve frame para não perder dados (mantém ordem FIFO)
+            self.queue.insert(0, frame);
             return Err(InMemoryTransportError::Full);
         }
         let len = frame.len();
@@ -622,5 +624,103 @@ pub fn sensitive_zeroize(buf: &mut [u8]) {
     #[cfg(not(feature = "zeroize-derive"))]
     {
         let _ = buf;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inmemory_transport_send_receive_fifo() {
+        let mut t = InMemoryTransport::new(10, 1200);
+        t.send(b"frame1").unwrap();
+        t.send(b"frame2").unwrap();
+        let mut buf = vec![0u8; 16];
+        let n = t.receive(&mut buf).unwrap();
+        assert_eq!(&buf[..n], b"frame1");
+        let n = t.receive(&mut buf).unwrap();
+        assert_eq!(&buf[..n], b"frame2");
+        assert!(matches!(
+            t.receive(&mut buf),
+            Err(InMemoryTransportError::Empty)
+        ));
+    }
+
+    #[test]
+    fn inmemory_transport_disconnect() {
+        let mut t = InMemoryTransport::new(10, 1200);
+        t.disconnect();
+        assert!(matches!(
+            t.send(b"x"),
+            Err(InMemoryTransportError::Disconnected)
+        ));
+        let mut buf = [0u8; 10];
+        assert!(matches!(
+            t.receive(&mut buf),
+            Err(InMemoryTransportError::Disconnected)
+        ));
+        t.reconnect();
+        t.send(b"ok").unwrap();
+        let n = t.receive(&mut buf).unwrap();
+        assert_eq!(&buf[..n], b"ok");
+    }
+
+    #[test]
+    fn inmemory_transport_full() {
+        let mut t = InMemoryTransport::new(1, 10);
+        t.send(b"a").unwrap();
+        assert!(matches!(t.send(b"b"), Err(InMemoryTransportError::Full)));
+        // buffer too small
+        t.send(b"toolongpayload").unwrap_err(); // frame too large vs max_frame_size? Actually max 10, payload 14 => Full
+        let mut t2 = InMemoryTransport::new(10, 1200);
+        t2.send(b"hello world").unwrap();
+        let mut tiny = [0u8; 2];
+        assert!(matches!(
+            t2.receive(&mut tiny),
+            Err(InMemoryTransportError::Full)
+        ));
+        // depois de falhar, frame ainda está na fila
+        let mut big = [0u8; 20];
+        let n = t2.receive(&mut big).unwrap();
+        assert_eq!(&big[..n], b"hello world");
+    }
+
+    #[test]
+    fn inmemory_transport_corrupt() {
+        let mut t = InMemoryTransport::new(10, 1200);
+        t.send(b"\x04\x00").unwrap();
+        t.corrupt_next();
+        let mut buf = [0u8; 10];
+        let n = t.receive(&mut buf).unwrap();
+        assert_ne!(buf[0], 0x04);
+        assert_eq!(n, 2);
+    }
+
+    #[test]
+    fn ctap_status_codes_roundtrip() {
+        for code in 0u8..=0x40 {
+            let s = CtapStatusCode::from_u8(code);
+            assert_eq!(s.as_u8(), code, "code {code:#x} roundtrip falhou {:?}", s);
+        }
+        assert_eq!(CtapStatusCode::from_u8(0xFF), CtapStatusCode::Other(0xFF));
+    }
+
+    #[test]
+    fn zeroize_helper_noop_when_disabled() {
+        let mut buf = [0xAAu8; 16];
+        sensitive_zeroize(&mut buf);
+        // sem feature zeroize, não apaga
+        #[cfg(not(feature = "zeroize-derive"))]
+        assert_eq!(buf, [0xAA; 16]);
+        #[cfg(feature = "zeroize-derive")]
+        assert_eq!(buf, [0x00; 16]);
+    }
+
+    #[test]
+    fn algorithm_ids() {
+        assert_eq!(Algorithm::Es256.cose_id(), -7);
+        assert_eq!(Algorithm::from_cose_id(-7), Some(Algorithm::Es256));
+        assert_eq!(Algorithm::from_cose_id(-999), None);
     }
 }
