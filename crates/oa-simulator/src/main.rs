@@ -128,7 +128,7 @@ fn main() {
 
     // reset
     match authenticator.dispatch(&[CMD_RESET]) {
-        Ok(r) => println!("reset ok ({} bytes)", r.len()),
+        Ok(_) => println!("reset ok"),
         Err(e) => println!("reset erro: {e:?}"),
     }
 
