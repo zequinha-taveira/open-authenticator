@@ -1,0 +1,12 @@
+[package]
+name = "oa-simulator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oa-core = { path = "../oa-core" }
+oa-ctap2 = { path = "../oa-ctap2" }
+
+[lints]
+workspace = true

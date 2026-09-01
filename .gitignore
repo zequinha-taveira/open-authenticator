@@ -1,0 +1,122 @@
+# ============================================================
+# Open Authenticator Framework - Git Ignore
+# Rust + Python + pytest + virtual hardware + firmware tooling
+# ============================================================
+
+# ---------- Rust / Cargo ----------
+target/
+Cargo.lock
+*.rs.bk
+**/*.rs.bk
+
+# Rust analyzer / rustfmt / IDE metadata
+.rust-analyzer/
+
+# ---------- Firmware / embedded build outputs ----------
+*.elf
+*.bin
+*.hex
+*.uf2
+*.map
+*.lst
+*.sym
+*.o
+*.a
+*.d
+build/
+out/
+artifacts/
+
+# Linker / generated memory files (keep source templates tracked)
+*.gen.x
+memory-generated.x
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.conda/
+
+# Packaging / build
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.tox/
+.nox/
+.eggs/
+*.egg-info/
+dist/
+build-python/
+wheelhouse/
+
+# Coverage / test reports
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+pytestdebug.log
+
+# ---------- Native / OS tooling ----------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ---------- IDEs / editors ----------
+.idea/
+.vscode/
+*.code-workspace
+
+# ---------- Local development / secrets ----------
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+secrets/
+private/
+
+# Key material should never be committed accidentally
+*.pem
+*.key
+*.p12
+*.pfx
+*.der
+*.crt
+
+# ---------- Logs / temporary files ----------
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+
+# ---------- Generated documentation ----------
+docs/_build/
+site/
+
+# ---------- macOS / Windows generated files ----------
+.AppleDouble
+.LSOverride
+Icon
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---------- Project-specific generated data ----------
+python/.virtual-device/
+python/runtime/
+vectors/generated/
+test-results/
+
+# Keep source specifications, documentation, vectors and firmware configuration tracked.

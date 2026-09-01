@@ -1,0 +1,18 @@
+[package]
+name = "oa-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Núcleo vendor-neutral e no_std-compatível para autenticadores (traits, tipos e erro CTAP2)"
+
+[dependencies]
+zeroize = { version = "1.7", optional = true }
+
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+zeroize-derive = ["dep:zeroize", "zeroize/derive"]
+
+[lints]
+workspace = true

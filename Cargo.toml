@@ -1,0 +1,18 @@
+[workspace]
+members = [
+  "crates/oa-core",
+  "crates/oa-ctap2",
+  "crates/oa-simulator",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0 OR MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+thiserror = "1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

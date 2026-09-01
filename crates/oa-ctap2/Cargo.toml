@@ -1,0 +1,19 @@
+[package]
+name = "oa-ctap2"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Dispatcher CTAP2 com CBOR canônico, validação estrita e state-machine"
+
+[dependencies]
+oa-core = { path = "../oa-core" }
+thiserror.workspace = true
+sha2 = { version = "0.10", default-features = false }
+
+[features]
+default = ["std"]
+std = ["oa-core/std", "sha2/std"]
+alloc = ["oa-core/alloc"]
+
+[lints]
+workspace = true
