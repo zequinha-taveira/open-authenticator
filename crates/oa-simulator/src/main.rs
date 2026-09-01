@@ -117,7 +117,8 @@ fn main() {
     req2.extend_from_slice(&payload2);
     match authenticator.dispatch(&req2) {
         Ok(resp) => {
-            println!("getAssertion ok ({} bytes)", resp.len());
+            let _ = resp;
+            println!("getAssertion ok");
         }
         Err(e) => println!("getAssertion erro: {e:?}"),
     }
